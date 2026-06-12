@@ -1,0 +1,88 @@
+name: H20 Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_source:
+        description: 'Kernel Source Code (Git Repository URL)'
+        required: true
+        default: 'https://github.com/JaggedZenith/hawaiikernel-a01core'
+      kernel_branch:
+        description: 'Target Branch Name to Build'
+        required: true
+        default: 'R2-next'
+      enable_kernelsu:
+        description: 'Enable KernelSU Patching (Check for KSU, Uncheck for nonKSU)'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+    - name: 📦 Update Arch Linux and Install Dependencies
+      run: |
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm git base-devel curl bc ccache zip unzip lib32-glibc python3
+
+    - name: 📥 Clone Kernel Source Code
+      run: |
+        git clone --depth=1 -b ${{ github.event.inputs.kernel_branch }} ${{ github.event.inputs.kernel_source }} workspace
+
+    - name: 🛠️ Download Toolchain
+      run: |
+        cd workspace
+        git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git arm-linux-androideabi-4.9
+
+    - name: 🧬 Setup KernelSU and Apply Allowlist Patch
+      if: ${{ github.event.inputs.enable_kernelsu == 'true' }}
+      run: |
+        cd workspace
+        curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s v3.0.0-30-legacy
+        sed -i 's|#define KERNEL_SU_ALLOWLIST "/data/adb/ksu/.allowlist"|#define KERNEL_SU_ALLOWLIST "/data/.allowlist"|g' "KernelSU/kernel/allowlist.c"
+        sed -i 's|O_TRUNC, 0644|O_TRUNC, 0664|g' "KernelSU/kernel/allowlist.c"
+
+    - name: 🪓 Prepare AnyKernel3
+      run: |
+        cd workspace
+        git clone https://github.com/JaggedZenith/AnyKernel3.git
+
+    - name: 🏗️ Compile Kernel
+      run: |
+        cd workspace
+        export CROSS_COMPILE=$(pwd)/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
+        export CC=$(pwd)/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-gcc
+        export ARCH=arm
+        export KCFLAGS=-w
+        export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+        make O=out a01core_defconfig
+        make O=out -j$(nproc)
+
+    - name: 📦 Repack using AnyKernel3
+      run: |
+        cd workspace
+        TIME=$(date +%Y%m%d-%H%M)
+        BRANCH=${{ github.event.inputs.kernel_branch }}
+        if [ "${{ github.event.inputs.enable_kernelsu }}" == "true" ]; then
+          ZIP_FILENAME="Hawaii-Kernel-${BRANCH}-KSU-${TIME}.zip"
+          ARTIFACT_NAME="Hawaii-Release-Artifact-KSU-${TIME}"
+        else
+          ZIP_FILENAME="Hawaii-Kernel-${BRANCH}-nonKSU-${TIME}.zip"
+          ARTIFACT_NAME="Hawaii-Release-Artifact-nonKSU-${TIME}"
+        fi
+        cp out/arch/arm/boot/Image arch/arm/boot/Image
+        cp out/arch/arm/boot/Image AnyKernel3/Image
+        cd AnyKernel3
+        zip -r9 "../${ZIP_FILENAME}" * -x .git *.zip README.md *placeholder
+        echo "ZIP_NAME=${ZIP_FILENAME}" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+
+    - name: 📤 Upload Compiled Kernel Artifact
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: workspace/${{ env.ZIP_NAME }}
