@@ -6,7 +6,7 @@ on:
       kernel_source:
         description: 'Kernel Source Code (Git Repository URL)'
         required: true
-        default: 'https://github.com/riteshexploit/RiteshHid.git'
+        default: 'https://github.com/JaggedZenith/hawaiikernel-a01core'
       kernel_branch:
         description: 'Target Branch Name to Build'
         required: true
@@ -59,7 +59,7 @@ jobs:
         export ARCH=arm
         export KCFLAGS=-w
         export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-        make O=out nritesh_defconfig
+        make O=out a01core_defconfig
         make O=out -j$(nproc)
 
     - name: 📦 Repack using AnyKernel3
