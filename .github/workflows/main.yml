@@ -6,11 +6,11 @@ on:
       kernel_source:
         description: 'Kernel Source Code (Git Repository URL)'
         required: true
-        default: 'https://github.com/JaggedZenith/hawaiikernel-a01core'
+        default: 'https://github.com/riteshexploit/RiteshHid.git'
       kernel_branch:
         description: 'Target Branch Name to Build'
         required: true
-        default: 'R2-next'
+        default: 'NR-bhai'
       enable_kernelsu:
         description: 'Enable KernelSU Patching (Check for KSU, Uncheck for nonKSU)'
         required: true
@@ -49,7 +49,7 @@ jobs:
     - name: 🪓 Prepare AnyKernel3
       run: |
         cd workspace
-        git clone https://github.com/JaggedZenith/AnyKernel3.git
+        git clone https://github.com/osm0sis/AnyKernel3.git
 
     - name: 🏗️ Compile Kernel
       run: |
@@ -59,7 +59,7 @@ jobs:
         export ARCH=arm
         export KCFLAGS=-w
         export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-        make O=out a01core_defconfig
+        make O=out nritesh_defconfig
         make O=out -j$(nproc)
 
     - name: 📦 Repack using AnyKernel3
